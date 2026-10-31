@@ -1,0 +1,22 @@
+id = "arthurgiroux.ado-builds"
+name = "Azure DevOps Builds"
+version = "0.2.0"
+min_herdr_version = "0.9.3"
+description = "Live Azure DevOps build status for the workspace repo and branch"
+platforms = ["macos", "linux"]
+
+[[actions]]
+id = "open"
+title = "Show Azure DevOps builds"
+contexts = ["workspace"]
+command = ["python3", "-m", "ado_builds", "open"]
+
+[[panes]]
+id = "builds"
+title = "ADO builds"
+placement = "split"
+command = ["python3", "-m", "ado_builds", "watch"]
+
+
+[[build]]
+command = ["python3", "-c", "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 'herdr-ado-plugin requires Python 3.11 or later')"]
