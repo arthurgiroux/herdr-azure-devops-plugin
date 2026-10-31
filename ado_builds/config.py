@@ -12,6 +12,8 @@ CWD_ENV = "ADO_BUILDS_CWD"
 CONFIG_FILE = "config.toml"
 PAT_FILE = "pat"
 PAT_ENV = "AZURE_DEVOPS_EXT_PAT"
+KEYCHAIN_SERVICE = "herdr-ado-builds"
+KEYCHAIN_DEFAULT_ACCOUNT = "default"
 
 ADO_RESOURCE_ID = "499b84ac-1321-427f-aa17-267ca6a8da0e"
 API_VERSION = "7.1"
@@ -37,6 +39,7 @@ class Settings:
     notify: str = NOTIFY_ALL
     remote: str | None = None
     pats: dict[str, str] = field(default_factory=dict)
+    env_pat: str | None = None
     error: str | None = None
 
 
@@ -87,20 +90,19 @@ def _parse_options(data: dict) -> dict:
 def load_settings() -> Settings:
     config_dir = os.environ.get("HERDR_PLUGIN_CONFIG_DIR")
     pats = _read_pats(Path(config_dir)) if config_dir else {}
-    if env_pat := os.environ.get(PAT_ENV, "").strip():
-        pats.setdefault("", env_pat)
+    env_pat = os.environ.get(PAT_ENV, "").strip() or None
     if not config_dir:
-        return Settings(pats=pats)
+        return Settings(pats=pats, env_pat=env_pat)
     path = Path(config_dir) / CONFIG_FILE
     if not path.is_file():
-        return Settings(pats=pats)
+        return Settings(pats=pats, env_pat=env_pat)
     try:
         with path.open("rb") as handle:
             options = _parse_options(tomllib.load(handle))
     except tomllib.TOMLDecodeError as err:
-        return Settings(pats=pats, error=f"Invalid {CONFIG_FILE}: {err}")
+        return Settings(pats=pats, env_pat=env_pat, error=f"Invalid {CONFIG_FILE}: {err}")
     except ValueError as err:
-        return Settings(pats=pats, error=f"Invalid {CONFIG_FILE}: {err}")
+        return Settings(pats=pats, env_pat=env_pat, error=f"Invalid {CONFIG_FILE}: {err}")
     except OSError as err:
-        return Settings(pats=pats, error=f"Cannot read {CONFIG_FILE}: {err}")
-    return Settings(pats=pats, **options)
+        return Settings(pats=pats, env_pat=env_pat, error=f"Cannot read {CONFIG_FILE}: {err}")
+    return Settings(pats=pats, env_pat=env_pat, **options)

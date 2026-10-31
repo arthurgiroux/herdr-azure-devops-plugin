@@ -6,7 +6,7 @@
 - Clear errors for a missing `az` or `git`, invalid config, non-JSON or unexpected HTTP responses, detached HEAD and non-Azure DevOps remotes.
 - Remote selection: configured `remote`, then the upstream remote, then `origin`, then the first Azure DevOps remote.
 - Branch follows the upstream branch name when it differs from the local one.
-- PAT also read from `AZURE_DEVOPS_EXT_PAT`.
+- PAT also read from the macOS Keychain (service `herdr-ado-builds`, account = org or `default`) and from `AZURE_DEVOPS_EXT_PAT`.
 - New config keys `notify` (`all`, `failures`, `off`) and `remote`; `poll_seconds` and `top_builds` are clamped.
 - The pane exits cleanly without a tty or on EOF.
 

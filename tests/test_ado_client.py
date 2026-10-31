@@ -87,6 +87,43 @@ class GetTest(unittest.TestCase):
         self.assertIn("invalid or expired", str(ctx.exception))
 
 
+class PatPrecedenceTest(unittest.TestCase):
+    def pat(self, keychain_items, pats=None, env=None, org="Org"):
+        client = AdoClient(pats or {}, env)
+        with mock.patch("ado_builds.keychain.lookup", side_effect=keychain_items.get):
+            return client._pat(org)
+
+    def test_order(self):
+        items = {"org": "kc-org", "default": "kc-default"}
+        self.assertEqual(self.pat(items, {"org": "file-org", "": "file"}, "env"), "file-org")
+        self.assertEqual(self.pat(items, {"": "file"}, "env"), "kc-org")
+        self.assertEqual(self.pat({"default": "kc-default"}, {"": "file"}, "env"), "kc-default")
+        self.assertEqual(self.pat({}, {"": "file"}, "env"), "file")
+        self.assertEqual(self.pat({}, {}, "env"), "env")
+        self.assertIsNone(self.pat({}))
+
+
+class KeychainTest(unittest.TestCase):
+    def run_lookup(self, platform="darwin", **run):
+        from ado_builds import keychain
+        with mock.patch("sys.platform", platform), mock.patch("subprocess.run", **run) as proc:
+            return keychain.lookup("org"), proc
+
+    def test_found(self):
+        token, proc = self.run_lookup(return_value=mock.Mock(returncode=0, stdout="secret\n"))
+        self.assertEqual(token, "secret")
+        self.assertIn("-w", proc.call_args.args[0])
+
+    def test_missing_item_and_missing_binary(self):
+        self.assertIsNone(self.run_lookup(return_value=mock.Mock(returncode=44, stdout=""))[0])
+        self.assertIsNone(self.run_lookup(side_effect=FileNotFoundError)[0])
+
+    def test_skipped_off_macos(self):
+        token, proc = self.run_lookup(platform="linux")
+        self.assertIsNone(token)
+        proc.assert_not_called()
+
+
 class BearerTest(unittest.TestCase):
     def test_az_missing(self):
         with mock.patch("subprocess.run", side_effect=FileNotFoundError):

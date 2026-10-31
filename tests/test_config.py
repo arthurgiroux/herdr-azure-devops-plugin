@@ -44,8 +44,8 @@ class LoadSettingsTest(unittest.TestCase):
         self.assertEqual(settings.pats, {"": "default", "my-org": "specific"})
 
     def test_env_pat_is_lowest_priority(self):
-        self.assertEqual(self.load(env={config.PAT_ENV: "env"}).pats, {"": "env"})
-        self.assertEqual(self.load({"pat": "file"}, {config.PAT_ENV: "env"}).pats, {"": "file"})
+        settings = self.load({"pat": "file"}, {config.PAT_ENV: "env"})
+        self.assertEqual((settings.pats, settings.env_pat), ({"": "file"}, "env"))
 
 
 if __name__ == "__main__":

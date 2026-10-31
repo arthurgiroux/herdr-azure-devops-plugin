@@ -51,7 +51,17 @@ dir="$(herdr plugin config-dir arthurgiroux.ado-builds)"
 mkdir -p "$dir"
 (umask 077; cat > "$dir/pat")
 ```
-`pat` applies to every organization. For a different PAT per organization, name the file `pat.<org>`, for example `pat.my-org`; it overrides `pat`. As a last resort the plugin reads the `AZURE_DEVOPS_EXT_PAT` environment variable.
+### macOS Keychain
+On macOS you can keep the PAT in the Keychain instead of a file. Using `-w` with no value makes `security` prompt for the token, so it stays out of shell history:
+```sh
+security add-generic-password -U -s herdr-ado-builds -a my-org -w
+```
+The account is the organization name; use the account `default` for a token that applies to every organization.
+
+### Precedence
+`pat.<org>` file, Keychain item for the org, Keychain item `default`, `pat` file, then `AZURE_DEVOPS_EXT_PAT`. If none is found the Azure CLI token is used.
+
+`pat` applies to every organization. For a different PAT per organization, name the file `pat.<org>`, for example `pat.my-org`; it overrides `pat`. 
 
 ## Troubleshooting
 - `AADSTS500011`: your tenant lacks the Azure DevOps service principal; use a PAT.

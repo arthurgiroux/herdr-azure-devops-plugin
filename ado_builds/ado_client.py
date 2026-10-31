@@ -10,7 +10,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 
-from . import config
+from . import config, keychain
 from .git_repo import RepoRef
 
 ADO_BASE_URL = "https://dev.azure.com"
@@ -88,8 +88,10 @@ def branch_url(ref: RepoRef) -> str:
 
 
 class AdoClient:
-    def __init__(self, pats: dict[str, str] | None = None) -> None:
+    def __init__(self, pats: dict[str, str] | None = None, env_pat: str | None = None) -> None:
         self._pats = pats or {}
+        self._env_pat = env_pat
+        self._keychain: dict[str, str] = {}
         self._token: str | None = None
         self._token_expiry = 0.0
         self._repo_ids: dict[tuple[str, str, str], str] = {}
@@ -122,11 +124,25 @@ class AdoClient:
             return "Basic " + base64.b64encode(f":{pat}".encode()).decode()
         return f"Bearer {self._bearer()}"
 
+    def _keychain_pat(self, account: str) -> str | None:
+        if account not in self._keychain and (token := keychain.lookup(account)):
+            self._keychain[account] = token
+        return self._keychain.get(account)
+
     def _pat(self, org: str) -> str | None:
-        return self._pats.get(org.lower()) or self._pats.get("")
+        """PAT precedence: org file, Keychain (org, then default), default file, env."""
+        org = org.lower()
+        return (
+            self._pats.get(org)
+            or self._keychain_pat(org)
+            or self._keychain_pat(config.KEYCHAIN_DEFAULT_ACCOUNT)
+            or self._pats.get("")
+            or self._env_pat
+        )
 
     def _auth_failure(self, org: str) -> AdoError:
         self._token = None
+        self._keychain.clear()
         if self._pat(org):
             return AdoError(f"Access denied for '{org}': the PAT is invalid or expired")
         return AdoError(f"Access denied for '{org}': run 'az login' or configure a PAT")
