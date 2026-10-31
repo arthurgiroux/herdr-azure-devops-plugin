@@ -17,7 +17,7 @@ def main() -> None:
         service.open_build_pane()
         return
     settings = config.load_settings()
-    client = AdoClient(settings.pats, settings.env_pat)
+    client = AdoClient(settings.pats, settings.env_pat, settings.pat_cmd)
     tracker = service.BuildTracker(
         service.source_cwd(), settings.top_builds, client,
         notify_mode=settings.notify, remote=settings.remote,

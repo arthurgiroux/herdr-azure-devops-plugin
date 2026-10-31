@@ -88,40 +88,38 @@ class GetTest(unittest.TestCase):
 
 
 class PatPrecedenceTest(unittest.TestCase):
-    def pat(self, keychain_items, pats=None, env=None, org="Org"):
-        client = AdoClient(pats or {}, env)
-        with mock.patch("ado_builds.keychain.lookup", side_effect=keychain_items.get):
-            return client._pat(org)
+    def pat(self, cmd_result, pats=None, env=None, cmd="get-pat"):
+        client = AdoClient(pats or {}, env, cmd)
+        with mock.patch("ado_builds.pat_command.run", return_value=cmd_result):
+            return client._pat("Org")
 
     def test_order(self):
-        items = {"org": "kc-org", "default": "kc-default"}
-        self.assertEqual(self.pat(items, {"org": "file-org", "": "file"}, "env"), "file-org")
-        self.assertEqual(self.pat(items, {"": "file"}, "env"), "kc-org")
-        self.assertEqual(self.pat({"default": "kc-default"}, {"": "file"}, "env"), "kc-default")
-        self.assertEqual(self.pat({}, {"": "file"}, "env"), "file")
-        self.assertEqual(self.pat({}, {}, "env"), "env")
-        self.assertIsNone(self.pat({}))
+        self.assertEqual(self.pat("cmd", {"org": "file-org", "": "file"}, "env"), "file-org")
+        self.assertEqual(self.pat("cmd", {"": "file"}, "env"), "cmd")
+        self.assertEqual(self.pat(None, {"": "file"}, "env"), "file")
+        self.assertEqual(self.pat(None, {}, "env"), "env")
+        self.assertIsNone(self.pat(None))
+
+    def test_no_command_configured(self):
+        self.assertIsNone(self.pat("cmd", cmd=None))
+
+    def test_command_receives_lowercased_org(self):
+        client = AdoClient(pat_cmd="get-pat")
+        with mock.patch("ado_builds.pat_command.run", return_value="t") as run:
+            client._pat("Org")
+            client._pat("Org")
+        run.assert_called_once_with("get-pat", "org")
 
 
-class KeychainTest(unittest.TestCase):
-    def run_lookup(self, platform="darwin", **run):
-        from ado_builds import keychain
-        with mock.patch("sys.platform", platform), mock.patch("subprocess.run", **run) as proc:
-            return keychain.lookup("org"), proc
+class PatCommandTest(unittest.TestCase):
+    def test_runs_through_shell_with_org_env(self):
+        from ado_builds import pat_command
+        self.assertEqual(pat_command.run('printf "tok-$ADO_ORG\\n"', "my-org"), "tok-my-org")
 
-    def test_found(self):
-        token, proc = self.run_lookup(return_value=mock.Mock(returncode=0, stdout="secret\n"))
-        self.assertEqual(token, "secret")
-        self.assertIn("-w", proc.call_args.args[0])
-
-    def test_missing_item_and_missing_binary(self):
-        self.assertIsNone(self.run_lookup(return_value=mock.Mock(returncode=44, stdout=""))[0])
-        self.assertIsNone(self.run_lookup(side_effect=FileNotFoundError)[0])
-
-    def test_skipped_off_macos(self):
-        token, proc = self.run_lookup(platform="linux")
-        self.assertIsNone(token)
-        proc.assert_not_called()
+    def test_failure_and_empty_output(self):
+        from ado_builds import pat_command
+        self.assertIsNone(pat_command.run("exit 3", "o"))
+        self.assertIsNone(pat_command.run("true", "o"))
 
 
 class BearerTest(unittest.TestCase):

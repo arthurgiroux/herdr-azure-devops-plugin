@@ -12,8 +12,7 @@ CWD_ENV = "ADO_BUILDS_CWD"
 CONFIG_FILE = "config.toml"
 PAT_FILE = "pat"
 PAT_ENV = "AZURE_DEVOPS_EXT_PAT"
-KEYCHAIN_SERVICE = "herdr-ado-builds"
-KEYCHAIN_DEFAULT_ACCOUNT = "default"
+ORG_ENV = "ADO_ORG"
 
 ADO_RESOURCE_ID = "499b84ac-1321-427f-aa17-267ca6a8da0e"
 API_VERSION = "7.1"
@@ -38,6 +37,7 @@ class Settings:
     top_builds: int = DEFAULT_TOP_BUILDS
     notify: str = NOTIFY_ALL
     remote: str | None = None
+    pat_cmd: str | None = None
     pats: dict[str, str] = field(default_factory=dict)
     env_pat: str | None = None
     error: str | None = None
@@ -79,11 +79,15 @@ def _parse_options(data: dict) -> dict:
     remote = data.get("remote")
     if remote is not None and not isinstance(remote, str):
         raise ValueError("'remote' must be a string")
+    pat_cmd = data.get("pat_cmd")
+    if pat_cmd is not None and not isinstance(pat_cmd, str):
+        raise ValueError("'pat_cmd' must be a string")
     return {
         "poll_seconds": _clamp(_int_option(data, "poll_seconds", DEFAULT_POLL_SECONDS), MIN_POLL_SECONDS, 86400),
         "top_builds": _clamp(_int_option(data, "top_builds", DEFAULT_TOP_BUILDS), MIN_TOP_BUILDS, MAX_TOP_BUILDS),
         "notify": notify,
         "remote": remote or None,
+        "pat_cmd": (pat_cmd or "").strip() or None,
     }
 
 

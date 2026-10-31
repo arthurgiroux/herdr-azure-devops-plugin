@@ -39,6 +39,10 @@ class LoadSettingsTest(unittest.TestCase):
         settings = self.load({"config.toml": 'notify = "failures"\nremote = "ado"\n'})
         self.assertEqual((settings.notify, settings.remote), ("failures", "ado"))
 
+    def test_pat_cmd(self):
+        self.assertEqual(self.load({"config.toml": 'pat_cmd = " get-pat "'}).pat_cmd, "get-pat")
+        self.assertIn("pat_cmd", self.load({"config.toml": "pat_cmd = 3"}).error)
+
     def test_pat_files(self):
         settings = self.load({"pat": "default\n", "pat.My-Org": "specific", "pat~": "backup", "pat.empty": " "})
         self.assertEqual(settings.pats, {"": "default", "my-org": "specific"})
