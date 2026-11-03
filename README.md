@@ -1,5 +1,7 @@
 # herdr Azure DevOps
 
+[![CI](https://github.com/arthurgiroux/herdr-azure-devops-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/arthurgiroux/herdr-azure-devops-plugin/actions/workflows/ci.yml)
+
 A herdr plugin for Azure DevOps. It currently shows live builds for the repo and branch of the current workspace, and raises a herdr toast when a build finishes. Works with Azure DevOps Services (`dev.azure.com` and `*.visualstudio.com`).
 
 ![Build list](docs/screenshot.png)
