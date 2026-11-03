@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ado_builds import config
+from azure_devops import config
 
 
 class LoadSettingsTest(unittest.TestCase):

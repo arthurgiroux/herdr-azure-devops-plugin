@@ -7,7 +7,7 @@ from . import config
 
 
 def run(command: str, org: str) -> str | None:
-    """Run the command through the shell with ADO_ORG set; return its trimmed stdout or None."""
+    """Run the command through the shell with AZURE_DEVOPS_ORG set; return its trimmed stdout or None."""
     try:
         proc = subprocess.run(
             ["sh", "-c", command], capture_output=True, text=True,

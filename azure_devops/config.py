@@ -5,16 +5,16 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-DEFAULT_PLUGIN_ID = "arthurgiroux.ado-builds"
+DEFAULT_PLUGIN_ID = "arthurgiroux.azure-devops"
 PLUGIN_ID = os.environ.get("HERDR_PLUGIN_ID") or DEFAULT_PLUGIN_ID
 PANE_ENTRYPOINT = "builds"
-CWD_ENV = "ADO_BUILDS_CWD"
+CWD_ENV = "AZURE_DEVOPS_CWD"
 CONFIG_FILE = "config.toml"
 PAT_FILE = "pat"
 PAT_ENV = "AZURE_DEVOPS_EXT_PAT"
-ORG_ENV = "ADO_ORG"
+ORG_ENV = "AZURE_DEVOPS_ORG"
 
-ADO_RESOURCE_ID = "499b84ac-1321-427f-aa17-267ca6a8da0e"
+AZURE_DEVOPS_RESOURCE_ID = "499b84ac-1321-427f-aa17-267ca6a8da0e"
 API_VERSION = "7.1"
 TOKEN_MARGIN_SECONDS = 300
 HTTP_TIMEOUT_SECONDS = 20

@@ -1,9 +1,9 @@
 import unittest
 from unittest import mock
 
-from ado_builds.ado_client import Build
-from ado_builds.git_repo import RepoError, RepoRef
-from ado_builds.service import BuildTracker
+from azure_devops.azure_devops_client import Build
+from azure_devops.git_repo import RepoError, RepoRef
+from azure_devops.service import BuildTracker
 
 REF = RepoRef("o", "p", "r", "main")
 
@@ -19,16 +19,33 @@ class FakeClient:
     def list_builds(self, ref, top):
         return self.rounds.pop(0)
 
+    def list_project_builds(self, ref, top):
+        return self.rounds.pop(0)
+
 
 class TrackerTest(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch("ado_builds.service.git_repo.repo_ref", return_value=REF)
+        patcher = mock.patch("azure_devops.service.git_repo.repo_ref", return_value=REF)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.toasts = []
 
     def tracker(self, *rounds, **kwargs):
         return BuildTracker("/x", 5, FakeClient(*rounds), lambda *args: self.toasts.append(args), **kwargs)
+
+    def test_project_scope_never_toasts_and_keeps_branch_state(self):
+        tracker = self.tracker(
+            [make_build("inProgress")],
+            [make_build("completed", "failed")],
+            [make_build("completed", "succeeded")],
+        )
+        tracker.poll()
+        snapshot = tracker.poll("project")
+        self.assertEqual(snapshot.scope, "project")
+        self.assertIn("_build", snapshot.web_url)
+        self.assertEqual(self.toasts, [])
+        tracker.poll()
+        self.assertEqual(len(self.toasts), 1)
 
     def test_no_toast_on_first_poll(self):
         self.tracker([make_build("completed", "succeeded")]).poll()
@@ -68,7 +85,7 @@ class TrackerTest(unittest.TestCase):
         self.assertIn("Unexpected error", snapshot.error)
 
     def test_repo_error_becomes_error(self):
-        with mock.patch("ado_builds.service.git_repo.repo_ref", side_effect=RepoError("Detached HEAD")):
+        with mock.patch("azure_devops.service.git_repo.repo_ref", side_effect=RepoError("Detached HEAD")):
             snapshot = self.tracker().poll()
         self.assertEqual(snapshot.error, "Detached HEAD")
 

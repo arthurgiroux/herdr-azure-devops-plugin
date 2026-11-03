@@ -13,7 +13,7 @@ from datetime import datetime
 from . import config, pat_command
 from .git_repo import RepoRef
 
-ADO_BASE_URL = "https://dev.azure.com"
+AZURE_DEVOPS_BASE_URL = "https://dev.azure.com"
 HTTP_UNAUTHORIZED = 401
 HTTP_FORBIDDEN = 403
 HTTP_NOT_FOUND = 404
@@ -23,7 +23,7 @@ HTTP_NON_AUTHORITATIVE = 203
 FRACTION_DIGITS = 6
 
 
-class AdoError(Exception):
+class AzureDevOpsError(Exception):
     pass
 
 
@@ -44,7 +44,7 @@ class Build:
 def parse_time(value: str | None) -> datetime | None:
     if not value:
         return None
-    # ADO sends 7 fraction digits.
+    # Azure DevOps sends 7 fraction digits.
     head, _, frac = value.rstrip("Z").partition(".")
     if frac:
         head += "." + frac[:FRACTION_DIGITS]
@@ -84,10 +84,14 @@ def _expiry(data: dict) -> float:
 def branch_url(ref: RepoRef) -> str:
     project, repo = (urllib.parse.quote(part) for part in (ref.project, ref.repo))
     branch = urllib.parse.quote(ref.branch, safe="")
-    return f"{ADO_BASE_URL}/{urllib.parse.quote(ref.org)}/{project}/_git/{repo}?version=GB{branch}"
+    return f"{AZURE_DEVOPS_BASE_URL}/{urllib.parse.quote(ref.org)}/{project}/_git/{repo}?version=GB{branch}"
 
 
-class AdoClient:
+def project_url(ref: RepoRef) -> str:
+    return f"{AZURE_DEVOPS_BASE_URL}/{urllib.parse.quote(ref.org)}/{urllib.parse.quote(ref.project)}/_build"
+
+
+class AzureDevOpsClient:
     def __init__(self, pats: dict[str, str] | None = None, env_pat: str | None = None,
                  pat_cmd: str | None = None) -> None:
         self._pats = pats or {}
@@ -103,19 +107,19 @@ class AdoClient:
             return self._token
         try:
             proc = subprocess.run(
-                ["az", "account", "get-access-token", "--resource", config.ADO_RESOURCE_ID, "-o", "json"],
+                ["az", "account", "get-access-token", "--resource", config.AZURE_DEVOPS_RESOURCE_ID, "-o", "json"],
                 capture_output=True, text=True,
             )
         except FileNotFoundError as err:
-            raise AdoError("Azure CLI not found; install it or configure a PAT") from err
+            raise AzureDevOpsError("Azure CLI not found; install it or configure a PAT") from err
         if proc.returncode != 0:
             reason = proc.stderr.strip().splitlines()[-1:] or ["no output"]
-            raise AdoError(f"Azure CLI token failed: {reason[0]}")
+            raise AzureDevOpsError(f"Azure CLI token failed: {reason[0]}")
         try:
             data = json.loads(proc.stdout)
             token = data["accessToken"]
         except (json.JSONDecodeError, KeyError, TypeError) as err:
-            raise AdoError("Azure CLI returned an unexpected token response") from err
+            raise AzureDevOpsError("Azure CLI returned an unexpected token response") from err
         self._token = token
         self._token_expiry = _expiry(data)
         return token
@@ -138,16 +142,16 @@ class AdoClient:
         org = org.lower()
         return self._pats.get(org) or self._command_pat(org) or self._pats.get("") or self._env_pat
 
-    def _auth_failure(self, org: str) -> AdoError:
+    def _auth_failure(self, org: str) -> AzureDevOpsError:
         self._token = None
         self._cmd_pats.clear()
         if self._pat(org):
-            return AdoError(f"Access denied for '{org}': the PAT is invalid or expired")
-        return AdoError(f"Access denied for '{org}': run 'az login' or configure a PAT")
+            return AzureDevOpsError(f"Access denied for '{org}': the PAT is invalid or expired")
+        return AzureDevOpsError(f"Access denied for '{org}': run 'az login' or configure a PAT")
 
     def _get(self, org: str, path: str, params: dict[str, str | int]) -> dict:
         query = urllib.parse.urlencode({**params, "api-version": config.API_VERSION})
-        url = f"{ADO_BASE_URL}/{urllib.parse.quote(org)}/{path}?{query}"
+        url = f"{AZURE_DEVOPS_BASE_URL}/{urllib.parse.quote(org)}/{path}?{query}"
         request = urllib.request.Request(url, headers={"Authorization": self._auth_header(org)})
         try:
             with urllib.request.urlopen(request, timeout=config.HTTP_TIMEOUT_SECONDS) as response:
@@ -157,26 +161,26 @@ class AdoClient:
         except urllib.error.HTTPError as err:
             raise self._http_error(org, path, err.code) from err
         except (urllib.error.URLError, TimeoutError) as err:
-            raise AdoError(f"Network error: {err}") from err
+            raise AzureDevOpsError(f"Network error: {err}") from err
         try:
             data = json.loads(body)
         except (json.JSONDecodeError, UnicodeDecodeError) as err:
             # ADO answers a bad PAT with an HTML sign-in page.
             raise self._auth_failure(org) from err
         if not isinstance(data, dict):
-            raise AdoError(f"Unexpected response from Azure DevOps: {path}")
+            raise AzureDevOpsError(f"Unexpected response from Azure DevOps: {path}")
         return data
 
-    def _http_error(self, org: str, path: str, code: int) -> AdoError:
+    def _http_error(self, org: str, path: str, code: int) -> AzureDevOpsError:
         if code == HTTP_UNAUTHORIZED:
             return self._auth_failure(org)
         if code == HTTP_FORBIDDEN:
-            return AdoError(f"Permission denied in '{org}': the account or PAT needs Build (Read) and Code (Read)")
+            return AzureDevOpsError(f"Permission denied in '{org}': the account or PAT needs Build (Read) and Code (Read)")
         if code == HTTP_NOT_FOUND:
-            return AdoError(f"Not found in '{org}': {path}")
+            return AzureDevOpsError(f"Not found in '{org}': {path}")
         if code == HTTP_TOO_MANY_REQUESTS or code >= HTTP_SERVER_ERROR:
-            return AdoError(f"Azure DevOps temporarily unavailable (HTTP {code}) for '{org}'")
-        return AdoError(f"HTTP {code} from '{org}': {path}")
+            return AzureDevOpsError(f"Azure DevOps temporarily unavailable (HTTP {code}) for '{org}'")
+        return AzureDevOpsError(f"HTTP {code} from '{org}': {path}")
 
     def repo_id(self, ref: RepoRef) -> str:
         key = (ref.org, ref.project, ref.repo)
@@ -194,4 +198,9 @@ class AdoClient:
             "queryOrder": "queueTimeDescending",
             "$top": top,
         })
+        return [to_build(item) for item in data.get("value", [])]
+
+    def list_project_builds(self, ref: RepoRef, top: int) -> list[Build]:
+        path = f"{urllib.parse.quote(ref.project)}/_apis/build/builds"
+        data = self._get(ref.org, path, {"queryOrder": "queueTimeDescending", "$top": top})
         return [to_build(item) for item in data.get("value", [])]

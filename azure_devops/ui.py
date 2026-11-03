@@ -9,8 +9,8 @@ import tty
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from .ado_client import Build
-from .service import BuildTracker, Snapshot
+from .azure_devops_client import Build
+from .service import SCOPE_BRANCH, SCOPE_PROJECT, BuildTracker, Snapshot
 
 ESC = "\033"
 RESET = f"{ESC}[0m"
@@ -29,6 +29,7 @@ GREY = f"{ESC}[90m"
 
 KEY_QUIT = "q"
 KEY_REFRESH = "r"
+KEY_SCOPE = "a"
 KEY_REDRAW = ""
 KEY_EOF = "\0eof"
 ELLIPSIS = "…"
@@ -64,7 +65,7 @@ BY_MIN_PIPELINE_WIDTH = 20
 MIN_TITLE_ROOM = 40
 GUTTER = 2
 INDENT = " "
-KEYS_HINT = "r refresh · q quit"
+KEYS_HINT = "r refresh · a branch/all · q quit"
 
 
 class Resized(Exception):
@@ -143,11 +144,16 @@ def title_line(snapshot: Snapshot, width: int) -> str:
     ref = snapshot.ref
     room = width - len(INDENT) * 2 - len(right) - GUTTER
     repo = fit(ref.repo, max(room // 2, MIN_PIPELINE_WIDTH))
-    branch = fit(ref.branch, max(room - len(repo) - GUTTER - 2, MIN_PIPELINE_WIDTH))
+    if snapshot.scope == SCOPE_PROJECT:
+        repo = fit(ref.project, max(room // 2, MIN_PIPELINE_WIDTH))
+        branch = "all builds"
+    else:
+        branch = fit(ref.branch, max(room - len(repo) - GUTTER - 2, MIN_PIPELINE_WIDTH))
     left_width = len(repo) + GUTTER + 2 + len(branch)
     pad = " " * max(width - len(INDENT) * 2 - left_width - len(right), GUTTER)
     repo_link = link(f"{BOLD}{repo}{RESET}", snapshot.web_url)
-    return f"{INDENT}{repo_link}{' ' * GUTTER}{CYAN}⎇ {branch}{RESET}{pad}{DIM}{right}{RESET}"
+    marker = "" if snapshot.scope == SCOPE_PROJECT else "⎇ "
+    return f"{INDENT}{repo_link}{' ' * GUTTER}{CYAN}{marker}{branch}{RESET}{pad}{DIM}{right}{RESET}"
 
 
 def render(snapshot: Snapshot) -> str:
@@ -157,7 +163,8 @@ def render(snapshot: Snapshot) -> str:
     if snapshot.error:
         lines.append(f"{INDENT}{RED}✘ {snapshot.error}{RESET}")
     elif not snapshot.builds:
-        lines.append(f"{INDENT}{DIM}No builds on this branch yet.{RESET}")
+        where = "in this project" if snapshot.scope == SCOPE_PROJECT else "on this branch"
+        lines.append(f"{INDENT}{DIM}No builds {where} yet.{RESET}")
     else:
         pipeline_width, show_by = layout(width)
         lines.append(header_row(pipeline_width, show_by))
@@ -185,8 +192,8 @@ def wait_key(seconds: float) -> str | None:
     return sys.stdin.read(1) or KEY_EOF
 
 
-def poll(tracker: BuildTracker, config_error: str | None) -> Snapshot:
-    snapshot = tracker.poll()
+def poll(tracker: BuildTracker, config_error: str | None, scope: str) -> Snapshot:
+    snapshot = tracker.poll(scope)
     if config_error:
         snapshot.error = config_error
     return snapshot
@@ -194,22 +201,25 @@ def poll(tracker: BuildTracker, config_error: str | None) -> Snapshot:
 
 def run(tracker: BuildTracker, poll_seconds: int, config_error: str | None = None) -> None:
     if not sys.stdin.isatty():
-        sys.exit("ado-builds: stdin is not a terminal; run it as a herdr pane")
+        sys.exit("azure-devops: stdin is not a terminal; run it as a herdr pane")
     fd = sys.stdin.fileno()
     saved = termios.tcgetattr(fd)
     tty.setcbreak(fd)
     signal.signal(signal.SIGWINCH, on_resize)
     sys.stdout.write(HIDE_CURSOR)
     try:
-        snapshot = poll(tracker, config_error)
+        scope = SCOPE_BRANCH
+        snapshot = poll(tracker, config_error, scope)
         while True:
             sys.stdout.write(render(snapshot))
             sys.stdout.flush()
             key = wait_key(poll_seconds)
             if key in (KEY_QUIT, KEY_EOF):
                 return
-            if key is None or key == KEY_REFRESH:
-                snapshot = poll(tracker, config_error)
+            if key == KEY_SCOPE:
+                scope = SCOPE_BRANCH if scope == SCOPE_PROJECT else SCOPE_PROJECT
+            if key is None or key in (KEY_REFRESH, KEY_SCOPE):
+                snapshot = poll(tracker, config_error, scope)
     except KeyboardInterrupt:
         pass
     finally:

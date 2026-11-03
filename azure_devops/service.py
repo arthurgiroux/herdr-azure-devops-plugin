@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from . import config, git_repo, herdr_client
-from .ado_client import AdoClient, AdoError, Build, branch_url
+from .azure_devops_client import AzureDevOpsClient, AzureDevOpsError, Build, branch_url, project_url
 from .git_repo import RepoError, RepoRef
 from .herdr_client import HerdrError
 
@@ -16,6 +16,8 @@ STATUS_COMPLETED = "completed"
 RESULT_SUCCEEDED = "succeeded"
 SOUND_DONE = "done"
 SOUND_ALERT = "request"
+SCOPE_BRANCH = "branch"
+SCOPE_PROJECT = "project"
 
 Notifier = Callable[[str, str, str], None]
 
@@ -27,6 +29,7 @@ class Snapshot:
     error: str | None = None
     updated: datetime | None = None
     web_url: str = ""
+    scope: str = SCOPE_BRANCH
 
 
 def source_cwd() -> str:
@@ -51,12 +54,12 @@ def open_build_pane() -> None:
     try:
         herdr_client.open_plugin_pane(pane_id, {config.CWD_ENV: source_cwd()})
     except HerdrError as err:
-        print(f"ado-builds: {err}", file=sys.stderr)
+        print(f"azure-devops: {err}", file=sys.stderr)
         sys.exit(1)
 
 
 class BuildTracker:
-    def __init__(self, cwd: str, top: int, client: AdoClient,
+    def __init__(self, cwd: str, top: int, client: AzureDevOpsClient,
                  notify: Notifier = herdr_client.show_toast,
                  notify_mode: str = config.NOTIFY_ALL, remote: str | None = None) -> None:
         self._cwd = cwd
@@ -68,22 +71,28 @@ class BuildTracker:
         self._known: dict[int, str] | None = None
         self._ref: RepoRef | None = None
 
-    def poll(self) -> Snapshot:
+    def poll(self, scope: str = SCOPE_BRANCH) -> Snapshot:
         now = datetime.now(timezone.utc)
         try:
             ref = git_repo.repo_ref(self._cwd, self._remote)
         except RepoError as err:
-            return Snapshot(error=str(err), updated=now)
+            return Snapshot(error=str(err), updated=now, scope=scope)
+        project_scope = scope == SCOPE_PROJECT
+        url = project_url(ref) if project_scope else branch_url(ref)
         if ref != self._ref:
             self._ref, self._known = ref, None
         try:
-            builds = self._client.list_builds(ref, self._top)
-        except AdoError as err:
-            return Snapshot(ref=ref, error=str(err), updated=now, web_url=branch_url(ref))
+            if project_scope:
+                builds = self._client.list_project_builds(ref, self._top)
+            else:
+                builds = self._client.list_builds(ref, self._top)
+        except AzureDevOpsError as err:
+            return Snapshot(ref=ref, error=str(err), updated=now, web_url=url, scope=scope)
         except Exception as err:  # keep the pane alive
-            return Snapshot(ref=ref, error=f"Unexpected error: {err}", updated=now, web_url=branch_url(ref))
-        self._report_finished(builds)
-        return Snapshot(ref=ref, builds=builds, updated=now, web_url=branch_url(ref))
+            return Snapshot(ref=ref, error=f"Unexpected error: {err}", updated=now, web_url=url, scope=scope)
+        if not project_scope:
+            self._report_finished(builds)
+        return Snapshot(ref=ref, builds=builds, updated=now, web_url=url, scope=scope)
 
     def _report_finished(self, builds: list[Build]) -> None:
         previous = self._known

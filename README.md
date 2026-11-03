@@ -1,6 +1,6 @@
-# herdr Azure DevOps builds
+# herdr Azure DevOps
 
-A herdr plugin that shows live Azure DevOps builds for the repo and branch of the current workspace, and raises a herdr toast when a build finishes. Works with Azure DevOps Services (`dev.azure.com` and `*.visualstudio.com`).
+A herdr plugin for Azure DevOps. It currently shows live builds for the repo and branch of the current workspace, and raises a herdr toast when a build finishes. Works with Azure DevOps Services (`dev.azure.com` and `*.visualstudio.com`).
 
 ## Requirements
 - herdr 0.9.3 or later
@@ -10,7 +10,7 @@ A herdr plugin that shows live Azure DevOps builds for the repo and branch of th
 
 ## Install
 ```sh
-herdr plugin install arthurgiroux/herdr-ado-plugin
+herdr plugin install arthurgiroux/herdr-azure-devops-plugin
 ```
 For development, link a local checkout instead:
 ```sh
@@ -20,20 +20,20 @@ herdr plugin link "$PWD"
 ## Use
 Run the action from a workspace pane on an Azure DevOps repo:
 ```sh
-herdr plugin action invoke arthurgiroux.ado-builds.open
+herdr plugin action invoke arthurgiroux.azure-devops.builds
 ```
 Or bind a key in herdr `config.toml`:
 ```toml
 [[keys.command]]
 key = "prefix+shift+b"
 type = "plugin_action"
-command = "arthurgiroux.ado-builds.open"
-description = "ADO builds"
+command = "arthurgiroux.azure-devops.builds"
+description = "Show Azure DevOps builds"
 ```
-In the pane: `r` refreshes, `q` quits.
+In the pane: `r` refreshes, `a` switches between the current branch and all builds of the project (no finish toasts in the project view), `q` quits.
 
 ## Config
-Optional `config.toml` in `herdr plugin config-dir arthurgiroux.ado-builds`:
+Optional `config.toml` in `herdr plugin config-dir arthurgiroux.azure-devops`:
 ```toml
 poll_seconds = 15      # refresh interval, minimum 5
 top_builds = 15        # builds shown, 1 to 100
@@ -48,26 +48,26 @@ Default: Azure CLI token (`az login`). If your tenant has no Azure DevOps servic
 
 Write the token to a file in the config dir (paste it, then press Ctrl-D):
 ```sh
-dir="$(herdr plugin config-dir arthurgiroux.ado-builds)"
+dir="$(herdr plugin config-dir arthurgiroux.azure-devops)"
 mkdir -p "$dir"
 (umask 077; cat > "$dir/pat")
 ```
 ### Secret store (`pat_cmd`)
-To keep the PAT out of plain files, set `pat_cmd` in `config.toml` to a shell command that prints it. It runs through `sh -c` with the organization name in `$ADO_ORG`; a non-zero exit or empty output counts as "not found".
+To keep the PAT out of plain files, set `pat_cmd` in `config.toml` to a shell command that prints it. It runs through `sh -c` with the organization name in `$AZURE_DEVOPS_ORG`; a non-zero exit or empty output counts as "not found".
 
 macOS Keychain (the prompt keeps the token out of shell history):
 ```sh
-security add-generic-password -U -s herdr-ado-builds -a my-org -w
+security add-generic-password -U -s herdr-azure-devops -a my-org -w
 ```
 ```toml
-pat_cmd = 'security find-generic-password -s herdr-ado-builds -a "$ADO_ORG" -w'
+pat_cmd = 'security find-generic-password -s herdr-azure-devops -a "$AZURE_DEVOPS_ORG" -w'
 ```
 Linux (GNOME Keyring or KWallet through libsecret):
 ```sh
-secret-tool store --label="herdr ADO" service herdr-ado-builds account my-org
+secret-tool store --label="herdr Azure DevOps" service herdr-azure-devops account my-org
 ```
 ```toml
-pat_cmd = 'secret-tool lookup service herdr-ado-builds account "$ADO_ORG"'
+pat_cmd = 'secret-tool lookup service herdr-azure-devops account "$AZURE_DEVOPS_ORG"'
 ```
 Any other tool works too (`pass`, 1Password `op read`, and so on).
 

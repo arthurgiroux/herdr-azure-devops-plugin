@@ -1,7 +1,11 @@
 # Changelog
 
+## Unreleased
+- Press `a` in the pane to list all builds of the project instead of only the current branch.
+
 ## 0.2.0
-- Plugin id is now `arthurgiroux.ado-builds`. Move your config and PAT files to the new `herdr plugin config-dir`.
+- Renamed from "ADO builds" to "Azure DevOps", since the plugin will cover more than builds. Plugin id is now `arthurgiroux.azure-devops` (was `arthurgiroux.ado-builds`) and the action is `arthurgiroux.azure-devops.builds` (was `...open`); move your config and PAT files to the new `herdr plugin config-dir` and update any key binding.
+- `pat_cmd` now receives the organization as `$AZURE_DEVOPS_ORG` (was `$ADO_ORG`); update any existing `pat_cmd`.
 - Install-time check for Python 3.11 or later.
 - Clear errors for a missing `az` or `git`, invalid config, non-JSON or unexpected HTTP responses, detached HEAD and non-Azure DevOps remotes.
 - Remote selection: configured `remote`, then the upstream remote, then `origin`, then the first Azure DevOps remote.

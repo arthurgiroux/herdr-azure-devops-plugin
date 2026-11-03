@@ -6,7 +6,8 @@ import urllib.error
 from datetime import datetime, timezone
 from unittest import mock
 
-from ado_builds.ado_client import AdoClient, AdoError, to_build
+from azure_devops.azure_devops_client import AzureDevOpsClient, AzureDevOpsError, to_build
+from azure_devops.git_repo import RepoRef
 
 ITEM = {
     "id": 42,
@@ -48,15 +49,15 @@ def http_error(code):
 
 class GetTest(unittest.TestCase):
     def get(self, client=None, **urlopen):
-        client = client or AdoClient({"": "tok"})
+        client = client or AzureDevOpsClient({"": "tok"})
         with mock.patch("urllib.request.urlopen", **urlopen):
             return client._get("org", "p/_apis/x", {})
 
     def test_basic_auth_for_pat_and_org_override(self):
-        client = AdoClient({"": "a", "org": "b"})
+        client = AzureDevOpsClient({"": "a", "org": "b"})
         expected = "Basic " + base64.b64encode(b":b").decode()
         self.assertEqual(client._auth_header("Org"), expected)
-        self.assertTrue(AdoClient({"": "a"})._auth_header("other").startswith("Basic "))
+        self.assertTrue(AzureDevOpsClient({"": "a"})._auth_header("other").startswith("Basic "))
 
     def test_ok(self):
         self.assertEqual(self.get(return_value=FakeResponse(json.dumps({"a": 1}).encode())), {"a": 1})
@@ -65,32 +66,32 @@ class GetTest(unittest.TestCase):
         cases = {401: "invalid or expired", 403: "Build (Read)", 404: "Not found", 500: "temporarily unavailable", 429: "temporarily unavailable"}
         for code, text in cases.items():
             with self.subTest(code=code):
-                with self.assertRaises(AdoError) as ctx:
+                with self.assertRaises(AzureDevOpsError) as ctx:
                     self.get(side_effect=http_error(code))
                 self.assertIn(text, str(ctx.exception))
                 self.assertIn("org", str(ctx.exception))
 
     def test_401_without_pat_mentions_az_login(self):
-        with self.assertRaises(AdoError) as ctx:
-            with mock.patch.object(AdoClient, "_bearer", return_value="t"):
-                self.get(AdoClient(), side_effect=http_error(401))
+        with self.assertRaises(AzureDevOpsError) as ctx:
+            with mock.patch.object(AzureDevOpsClient, "_bearer", return_value="t"):
+                self.get(AzureDevOpsClient(), side_effect=http_error(401))
         self.assertIn("az login", str(ctx.exception))
 
     def test_203_is_auth_failure(self):
-        with self.assertRaises(AdoError) as ctx:
+        with self.assertRaises(AzureDevOpsError) as ctx:
             self.get(return_value=FakeResponse(b"{}", status=203))
         self.assertIn("invalid or expired", str(ctx.exception))
 
     def test_html_body_is_auth_failure(self):
-        with self.assertRaises(AdoError) as ctx:
+        with self.assertRaises(AzureDevOpsError) as ctx:
             self.get(return_value=FakeResponse(b"<html>sign in</html>"))
         self.assertIn("invalid or expired", str(ctx.exception))
 
 
 class PatPrecedenceTest(unittest.TestCase):
     def pat(self, cmd_result, pats=None, env=None, cmd="get-pat"):
-        client = AdoClient(pats or {}, env, cmd)
-        with mock.patch("ado_builds.pat_command.run", return_value=cmd_result):
+        client = AzureDevOpsClient(pats or {}, env, cmd)
+        with mock.patch("azure_devops.pat_command.run", return_value=cmd_result):
             return client._pat("Org")
 
     def test_order(self):
@@ -104,8 +105,8 @@ class PatPrecedenceTest(unittest.TestCase):
         self.assertIsNone(self.pat("cmd", cmd=None))
 
     def test_command_receives_lowercased_org(self):
-        client = AdoClient(pat_cmd="get-pat")
-        with mock.patch("ado_builds.pat_command.run", return_value="t") as run:
+        client = AzureDevOpsClient(pat_cmd="get-pat")
+        with mock.patch("azure_devops.pat_command.run", return_value="t") as run:
             client._pat("Org")
             client._pat("Org")
         run.assert_called_once_with("get-pat", "org")
@@ -113,11 +114,11 @@ class PatPrecedenceTest(unittest.TestCase):
 
 class PatCommandTest(unittest.TestCase):
     def test_runs_through_shell_with_org_env(self):
-        from ado_builds import pat_command
-        self.assertEqual(pat_command.run('printf "tok-$ADO_ORG\\n"', "my-org"), "tok-my-org")
+        from azure_devops import pat_command
+        self.assertEqual(pat_command.run('printf "tok-$AZURE_DEVOPS_ORG\\n"', "my-org"), "tok-my-org")
 
     def test_failure_and_empty_output(self):
-        from ado_builds import pat_command
+        from azure_devops import pat_command
         self.assertIsNone(pat_command.run("exit 3", "o"))
         self.assertIsNone(pat_command.run("true", "o"))
 
@@ -125,24 +126,36 @@ class PatCommandTest(unittest.TestCase):
 class BearerTest(unittest.TestCase):
     def test_az_missing(self):
         with mock.patch("subprocess.run", side_effect=FileNotFoundError):
-            with self.assertRaises(AdoError) as ctx:
-                AdoClient()._bearer()
+            with self.assertRaises(AzureDevOpsError) as ctx:
+                AzureDevOpsClient()._bearer()
         self.assertIn("Azure CLI not found", str(ctx.exception))
 
     def test_bad_json_and_missing_token(self):
         for out in ("nope", "{}"):
             proc = mock.Mock(returncode=0, stdout=out, stderr="")
             with mock.patch("subprocess.run", return_value=proc):
-                with self.assertRaises(AdoError):
-                    AdoClient()._bearer()
+                with self.assertRaises(AzureDevOpsError):
+                    AzureDevOpsClient()._bearer()
 
     def test_expires_on_iso_fallback(self):
         out = json.dumps({"accessToken": "t", "expiresOn": "2099-01-01 00:00:00.000000"})
         with mock.patch("subprocess.run", return_value=mock.Mock(returncode=0, stdout=out, stderr="")):
-            client = AdoClient()
+            client = AzureDevOpsClient()
             self.assertEqual(client._bearer(), "t")
         self.assertGreater(client._token_expiry, 4_000_000_000)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ListProjectBuildsTest(unittest.TestCase):
+    def test_no_branch_or_repository_filter(self):
+        client = AzureDevOpsClient()
+        with mock.patch.object(client, "_get", return_value={"value": [ITEM]}) as get, \
+                mock.patch.object(client, "repo_id") as repo_id:
+            builds = client.list_project_builds(RepoRef("o", "p", "r", "main"), 7)
+        params = get.call_args.args[2]
+        self.assertEqual(params, {"queryOrder": "queueTimeDescending", "$top": 7})
+        repo_id.assert_not_called()
+        self.assertEqual(len(builds), 1)

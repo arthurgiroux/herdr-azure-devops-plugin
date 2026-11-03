@@ -4,7 +4,7 @@ import tempfile
 import unittest
 import unittest.mock
 
-from ado_builds.git_repo import RepoError, RepoRef, parse_remote, repo_ref
+from azure_devops.git_repo import RepoError, RepoRef, parse_remote, repo_ref
 
 EXPECTED = ("my-org", "My Project", "my-repo")
 

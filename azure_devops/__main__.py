@@ -1,23 +1,23 @@
-"""Entry: 'open' action or 'watch' pane."""
+"""Entry: 'builds' action or 'watch' pane."""
 
 import sys
 
 MIN_PYTHON = (3, 11)
-COMMAND_OPEN = "open"
+COMMAND_BUILDS = "builds"
 
 
 def main() -> None:
     if sys.version_info < MIN_PYTHON:
         required = ".".join(map(str, MIN_PYTHON))
-        sys.exit(f"ado-builds requires Python {required} or later (found {sys.version.split()[0]})")
+        sys.exit(f"azure-devops requires Python {required} or later (found {sys.version.split()[0]})")
     from . import config, service, ui
-    from .ado_client import AdoClient
+    from .azure_devops_client import AzureDevOpsClient
 
-    if sys.argv[1:2] == [COMMAND_OPEN]:
+    if sys.argv[1:2] == [COMMAND_BUILDS]:
         service.open_build_pane()
         return
     settings = config.load_settings()
-    client = AdoClient(settings.pats, settings.env_pat, settings.pat_cmd)
+    client = AzureDevOpsClient(settings.pats, settings.env_pat, settings.pat_cmd)
     tracker = service.BuildTracker(
         service.source_cwd(), settings.top_builds, client,
         notify_mode=settings.notify, remote=settings.remote,
