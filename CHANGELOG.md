@@ -2,6 +2,7 @@
 
 ## Unreleased
 - Press `a` in the pane to list all builds of the project instead of only the current branch.
+- Demo mode (`AZURE_DEVOPS_DEMO=1`) with dummy data for screenshots.
 
 ## 0.2.0
 - Renamed from "ADO builds" to "Azure DevOps", since the plugin will cover more than builds. Plugin id is now `arthurgiroux.azure-devops` (was `arthurgiroux.ado-builds`) and the action is `arthurgiroux.azure-devops.builds` (was `...open`); move your config and PAT files to the new `herdr plugin config-dir` and update any key binding.
