@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 - Press `a` in the pane to list all builds of the project instead of only the current branch.
 - Demo mode (`AZURE_DEVOPS_DEMO=1`) with dummy data for screenshots.
 

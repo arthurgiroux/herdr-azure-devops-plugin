@@ -1,6 +1,6 @@
 id = "arthurgiroux.azure-devops"
 name = "Azure DevOps"
-version = "0.2.0"
+version = "0.3.0"
 min_herdr_version = "0.9.3"
 description = "Azure DevOps integration for herdr, starting with live build status for the workspace repo and branch"
 platforms = ["macos", "linux"]
